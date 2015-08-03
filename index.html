@@ -46,9 +46,6 @@
 		}
 
 	</style>
-		<script type="text/javascript">
-							
-		</script>
 	</head>
 	<body>
 		<div class="jumbotron">
@@ -116,186 +113,141 @@
 			</div>			
 		</div>
 		<footer>
-			<p>Contains OS data © Crown copyright [and database right] (2015)</p>
+			<p>Contains OS data &copy; Crown copyright [and database right] (2015)</p>
 		</footer>
-		<script>
 
-			google.load('visualization', '1.0', {'packages':['corechart']});
-			//google.setOnLoadCallback(drawChart); //don't need this as it is called after the polygons are sorted
-				
-				function drawChart(polyArray){
-					//console.log("In drawChart! polyArray: ",polyArray);
-					var data = new google.visualization.DataTable();
-					data.addColumn('string', 'Ward');
-					data.addColumn('number', 'Urban Temp');
-					data.addColumn({type:'string', role: 'style'});//not the easiest to implement...kept doing {role: 'style'}
-																				//and getting type error
-					for (var i=0; i<24; i++){
-						var wardName = polyArray[i].ID.slice(0,polyArray[i].ID.length-5);//shortening the ward name (-"ward")
-						var urbanTemp = +(polyArray[i].utemp).toFixed(2);//coercing to number
-						var color = polyArray[i].fillColor;
-					data.addRow([wardName,urbanTemp,color]);		   
-					}
-					// Set chart options
-					var options = {'title':'The Difference in Temperature from the coolest points in Oxford',
-									   'width': '100%',
-									   'height': 355,
-										animation: {
-														'startup': true,
-														'duration': 1500,
-														'easing': 'inAndOut'
-													  },
-										legend: {position: 'none'},
-									   bar: {groupWidth: '96%'},
-										chartArea: {left: 30,top:30,width:'90%',height:'70%'},
-										hAxis: {
-												  slantedTextAngle: 60,
-												  viewWindowMode: 'maximized'
-												 }														
-									  };
+<script>
+google.load('visualization', '1.0', {'packages':['corechart']});
+//google.setOnLoadCallback(drawChart); //don't need this as it is called after the polygons are sorted
+var colorScale = ['#d73027','#f46d43','#fdae61','#fee090','#e0f3f8','#abd9e9','#74add1','#4575b4'];
 
-					// Instantiate and draw our chart, passing in some options.
-					var chart = new google.visualization.ColumnChart(document.getElementById('bar'));
-					chart.draw(data, options);
-			 	}	
+function initialize() {
 
+  $('a').attr("href", "javascript:void(0)");
+
+  $('li').click(function(){
+	wardData.setMap(null);
+	wardData = new google.maps.Data();
+	allTemps = [];
+	date = (this).id;
+   date2 = date.slice(0,date.length-1)+'S';
+	var showdate = (this).value;
+	$('#mapDate').text(datelist[showdate]);
+	loadWardData(date);
+  });
+ 
+  var date2 = 'MEANJun13S',
+		date = 'MEANJun13U',
+      allTemps = [],
+	   count = 0,
+      datelist = ['June 6th, 2013','July 8th, 2013','October 12th, 2013','February 1st, 2014','January 19th, 2015','February 4th, 2015','April 9th, 2015','May 27th, 2015'],
+      mapOptions = {
+			 				center: new google.maps.LatLng(51.7551,-1.25),
+							zoom: 12,
+							mapTypeId: google.maps.MapTypeId.ROADMAP,
+							streetViewControl: false,
+							panControl: false,
+							minZoom: 12,
+  						 };
+
+  //initialize map
+  var map = new google.maps.Map(document.getElementById("target"), mapOptions);
+  var wardData = new google.maps.Data(); 
+
+  loadWardData(date);    
+
+	function loadWardData(date){		
+		wardData.setMap(map);
+		wardData.loadGeoJson('WardMeans.geojson',null,function(features){
+		  features.forEach(function(f){
+				var name = f.getProperty('NAME');
+				name = name.slice(0,name.length-5);
+				f.setProperty('NAME',name);
+				var temp = f.getProperty(date);
+				allTemps.push(temp);					
+				});	
+			allTemps.sort(function(a,b){return b-a;});
+			wardData.forEach(function(feat){
+				var temp = feat.getProperty(date);
+				while (temp != allTemps[count] && count != 25){count++;}
+				count = Math.floor(count/3);
+				var color = colorScale[count];
+				feat.setProperty('fillColor', color);
+				count = 0;
+			});
+			wardData.setStyle(function(feat){
+				return ({fillColor: feat.getProperty('fillColor'),
+							fillOpacity: 0.7,
+							strokeWeight: 1.5});
+			});			
+			drawChart(wardData,date);			
+		});
+			
+		wardData.addListener('mouseover', function(event){
+			wardData.revertStyle();
+			wardData.overrideStyle(event.feature,{strokeWeight: 2,fillOpacity:0.9});
+		});
+
+		wardData.addListener('mouseout', function(event){
+			wardData.revertStyle();
+		});
+
+		wardData.addListener('click', function(event){			
+			var feat = event.feature;
+			var infoW = new google.maps.InfoWindow();
+			var point = new google.maps.LatLng(feat.getProperty('MEANY'),feat.getProperty('MEANX'));
+			var desc = '<b>'+feat.getProperty('NAME')+'</b><br>Urban Temp: '+feat.getProperty(date).toFixed(2)+
+							' &deg;C<br>Surface Temp: '+(feat.getProperty(date2)-272.15).toFixed(2)+' &deg;C<br>'+
+							'# Data Points: '+feat.getProperty('COUNT');
+			infoW.setContent(desc);
+			infoW.setPosition(point);
+			infoW.open(map);
+		});
+		
+	}	
+}//end initialize();
 	
-			var map,
-				 infowindow,
-				 justTemps = [],
-				 colorScale = ['#d73027','#f46d43','#fdae61','#fee090','#e0f3f8','#abd9e9','#74add1','#4575b4'];
-			
-			function initialize() {
+	function drawChart(wd,d){
+		var data = new google.visualization.DataTable();
+		data.addColumn('string', 'Ward');
+		data.addColumn('number', 'Urban Temp');
+		data.addColumn({type:'string', role: 'style'});//not the easiest to implement...kept doing {role: 'style'}
+																	  //and getting type error
+		wd.forEach(function(feat){
+			var ward = feat.getProperty('NAME');
+			var utemp = +feat.getProperty(d).toFixed(2);
+			var fill = feat.getProperty('fillColor');
+			data.addRow([ward,utemp,fill]);
+		});		
+		// Set chart options
+		var options = {'title':'The Difference in Temperature from the Averaged 10 Coldest Points in Oxford',
+						   'width': '100%',
+						   'height': 355,
+							animation: {
+											'startup': true,
+											'duration': 1500,
+											'easing': 'inAndOut'
+										  },
+							legend: {position: 'none'},
+						   bar: {groupWidth: '96%'},
+							chartArea: {
+											left: 30,
+											top:30,
+											width:'90%',
+											height:'70%'
+										  },
+							hAxis: {
+									  slantedTextAngle: 60,
+									  viewWindowMode: 'maximized'
+									 }														
+						  };
 
-				$('a').attr("href", "javascript:void(0)");
+		// Instantiate and draw our chart, passing in some options.
+		var chart = new google.visualization.ColumnChart(document.getElementById('bar'));
+		chart.draw(data, options);
+ 	}
+google.maps.event.addDomListener(window, 'load', initialize);
 
-				var mapOptions = {
-					center: new google.maps.LatLng(51.7551,-1.25),
-					zoom: 12,
-					mapTypeId: google.maps.MapTypeId.ROADMAP,
-					streetViewControl: false,
-					panControl: false,
-					minZoom: 12,
-				}
-				map = new google.maps.Map(document.getElementById("target"), mapOptions);
-				
-				var wardTemps = [],
-					 allPolygons = [],
-					 datelist = ['June 6th, 2013','July 8th, 2013','October 12th, 2013','February 1st, 2014','January 19th, 2015','February 4th, 2015','April 9th, 2015','May 27th, 2015'],
-					 wardData = new google.maps.Data();		 
-				
-				$('li').click(function(){
-					for (var i=0; i<24; i++){
-						allPolygons[i].setMap(null);
-					}
-					allPolygons = [];
-					justTemps = [];
-					var date = (this).id;
-					var showdate = (this).value;
-					$('#mapDate').text(datelist[showdate]);
-					loadWardData(date);
-				})
-				
-				loadWardData("MEANJun13U");
-				
-				function loadWardData(date){
-					
-					wardData.loadGeoJson('WardMeans.geojson',{idPropertyName:"NAME"},function (features){
-						features.forEach(function(f){
-							var geomArray = f.getGeometry().getArray();
-							var coords = [];
-							key = f.getId();
-							var value = f.getProperty(date);
-							justTemps.push(value);
-							wardTemps[key] = value;
-							//about now on day two of googlemaps that I want to use some D3 domain and ranges!
-							geomArray.forEach(function(p){
-
-								var pointArray = p.getArray();
-
-								for (var i=0; i<pointArray.length; i++){
-								var iPoint = pointArray[i];
-								var point = new google.maps.LatLng(iPoint.A,iPoint.F);
-								
-								coords.push(point);
-								}
-						})
-						var x = [],
-							 y = [];
-
-							for (var i=0; i<coords.length; i++){
-								x.push(coords[i].F);
-								y.push(coords[i].A);																						
-							}
-							x.sort(function(a,b){return a-b});
-							y.sort(function(a,b){return a-b});
-
-							var xmin = x[0],
-								 ymin = y[0],
-								 xmax = x[coords.length-1],
-								 ymax = y[coords.length-1],
-								 center = {},
-								 date2 = date.slice(0,length-1)+"S",
-								 tempU = f.getProperty(date),
-								 tempS = (f.getProperty(date2)-272.15).toFixed(2)
-
-							center.x = xmin + ((xmax - xmin)/2);
-							center.y = ymax - ((ymax - ymin)/2);		
-							
-							var cent = new google.maps.LatLng(center.y,center.x);
-							var poly = new google.maps.Polygon({
-													paths: coords,
-													ID: f.getId(),
-													map: map,
-													strokeColor: '#000000',
-													fillOpacity: 0.7,
-													strokeWeight: 1,
-													utemp: tempU,
-													stemp: tempS,
-													desc: '<b>'+f.getId()+'</b><br>Urban Temp: '+tempU.toFixed(2)+
-															' (&deg;C)<br>Surface Temp: '+tempS+' (&deg;C)'								
-													});
-							allPolygons.push(poly);
-							
-							addInfo(poly, cent);	//add event listener and infowindows
-						})
-						justTemps.sort(function(a,b){return b-a});
-						//setWardStyle();
-						polystyle(allPolygons,justTemps);
-						drawChart(allPolygons);
-					});
-				};		
-			}//end initialize()
-				
-				function polystyle(polys,temps){
-					var count = 0;
-					for (var i=0; i<24; i++){
-						var polyTemp = polys[i].utemp;			
-						while (polyTemp != temps[count] && count != 25){
-							count++;
-						}
-						count = Math.floor(count/3);
-						polys[i].setOptions({
-									fillColor: colorScale[count],
-									fillOpacity: 0.7
-									});
-						
-						count = 0; //reset counter!						
-					}
-				};
-
-				function addInfo(feat,c) {
-					infowindow = new google.maps.InfoWindow();
-
-					google.maps.event.addListener(feat, 'click', function(){						
-						infowindow.setPosition(c);
-						infowindow.setContent(feat.desc);
-						infowindow.open(map);
-					});			
-				};
-						
-		google.maps.event.addDomListener(window, 'load', initialize);			
-			
-		</script>
-	</body>
+</script>
+</body>
 </html>
